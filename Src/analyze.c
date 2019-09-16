@@ -34,9 +34,10 @@ void xAnalyzeTask(void *arguments){
 	portBASE_TYPE xStatus;
 	uint8_t i = 0;
 
-	//int16_t deltaPressure = 0;
+	int16_t deltaPressure = 0;
 	uint8_t prescalerCounter = 10;
 	//uint8_t analyzeCounterRef[4] = {5};
+	int16_t pressureThreshold = 10;
 
 	xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
 	for(;;){
@@ -46,14 +47,16 @@ void xAnalyzeTask(void *arguments){
 				workState = FREE;
 				for (i = 0; i < 4; i++){
 					if (pressIsLower[i]){
-						if (filteredData[i] < nessPressure[i]){
+						deltaPressure = nessPressure[i] - filteredData[i];
+						if (deltaPressure > pressureThreshold){
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
 							workState = WORKING;
 						}
 					}
 					else {
-						if (filteredData[i] > nessPressure[i]){
+						deltaPressure = filteredData[i] - nessPressure[i];
+						if (deltaPressure > pressureThreshold){
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							workState = WORKING;
