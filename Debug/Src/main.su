@@ -1,4 +1,5 @@
-main.c:470:6:StartDefaultTask	48	static
-main.c:160:6:SystemClock_Config	128	static
-main.c:80:5:main	80	static
-main.c:502:6:Error_Handler	0	static
+main.c:187:6:SystemClock_Config	128	static
+main.c:112:5:main	80	static
+main.c:488:6:HAL_UART_RxCpltCallback	16	static
+main.c:511:6:HAL_ADCEx_InjectedConvCpltCallback	16	static
+main.c:558:6:Error_Handler	0	static

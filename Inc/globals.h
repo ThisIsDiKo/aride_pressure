@@ -9,6 +9,8 @@
 #define GLOBALS_H_
 
 #include "stm32f1xx_hal.h"
+#include "cmsis_os.h"
+#include <string.h>
 
 #define DEBUG_SERIAL	1
 
@@ -70,5 +72,7 @@
 #define PRESSURE_ACCURACY			75
 
 #define ADC_DATA_PERIOD			50
+
+#define SETTINGS_FLASH_PAGE_ADDR	0x0801FC00
 
 #endif /* GLOBALS_H_ */

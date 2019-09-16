@@ -24,7 +24,9 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "structures.h"
+#include "controllerInit.h"
+#include "controllerUtils.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -53,6 +55,36 @@ DMA_HandleTypeDef hdma_usart1_tx;
 osThreadId defaultTaskHandle;
 /* USER CODE BEGIN PV */
 
+GPIO_TypeDef * UP_PORT[4] = {C1_UP_PORT, C2_UP_PORT, C3_UP_PORT, C4_UP_PORT};
+uint32_t UP_PIN[4] = {C1_UP_PIN, C2_UP_PIN, C3_UP_PIN, C4_UP_PIN};
+GPIO_TypeDef * DOWN_PORT[4] = {C1_DOWN_PORT, C2_DOWN_PORT, C3_DOWN_PORT, C4_DOWN_PORT};
+uint32_t DOWN_PIN[4] = {C1_DOWN_PIN, C2_DOWN_PIN, C3_DOWN_PIN, C4_DOWN_PIN};
+
+uint16_t ADCRawData[4];
+uint16_t sensorValue[4];
+
+char message[128] = {0};
+uint8_t messageLength = 0;
+
+uint8_t recCommandBuffer[MAX_COMMAND_LENGTH];
+uint8_t p_recCommandBuffer;
+uint8_t recCommandByte;
+uint8_t commandToProcessBuffer[MAX_COMMAND_LENGTH];
+uint8_t p_commandToProcessBuffer;
+
+uint16_t nessPressure[4] = {0};
+uint16_t server_UID = 0;
+
+enum AirSystemType airSystem = COMPRESSOR;
+
+struct controllerData controllerSettings = {0};
+uint16_t filteredData[4] = {0};
+
+enum WorkState workState = FREE;
+enum Compensation pressureCompensation = OFF;
+
+xQueueHandle xRecCommandQueue;
+xSemaphoreHandle xPressureCompensationSemaphore;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -106,7 +138,7 @@ int main(void)
   MX_TIM3_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-
+  controller_init();
   /* USER CODE END 2 */
 
   /* USER CODE BEGIN RTOS_MUTEX */
@@ -127,11 +159,6 @@ int main(void)
 
   /* Create the thread(s) */
   /* definition and creation of defaultTask */
-  HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
-  	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_2);
-  	HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_3);
-  osThreadDef(defaultTask, StartDefaultTask, osPriorityNormal, 0, 128);
-  defaultTaskHandle = osThreadCreate(osThread(defaultTask), NULL);
 
   /* USER CODE BEGIN RTOS_THREADS */
   /* add threads, ... */
@@ -369,7 +396,7 @@ static void MX_USART1_UART_Init(void)
 
   /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
-  huart1.Init.BaudRate = 19200;
+  huart1.Init.BaudRate = 9600;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
   huart1.Init.StopBits = UART_STOPBITS_1;
   huart1.Init.Parity = UART_PARITY_NONE;
@@ -458,6 +485,35 @@ static void MX_GPIO_Init(void)
 
 /* USER CODE BEGIN 4 */
 
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
+	if(huart->Instance == USART1){
+		if (recCommandByte != '\r'){
+			recCommandBuffer[p_recCommandBuffer] = recCommandByte;
+			p_recCommandBuffer++;
+
+			if (p_recCommandBuffer == MAX_COMMAND_LENGTH) p_recCommandBuffer = 0;
+
+			if(recCommandByte == '\n'){
+				memcpy(commandToProcessBuffer, recCommandBuffer, p_recCommandBuffer);
+				portBASE_TYPE r1;
+				xQueueSendToBackFromISR(xRecCommandQueue, &commandToProcessBuffer, &r1);
+				p_recCommandBuffer = 0;
+			}
+			else if (recCommandByte == 0xFF) {
+				p_recCommandBuffer = 0;
+			}
+		}
+
+		HAL_UART_Receive_IT(&huart1, &recCommandByte, 1);
+	}
+}
+
+void HAL_ADCEx_InjectedConvCpltCallback(ADC_HandleTypeDef* hadc1){
+	  ADCRawData[0]=HAL_ADCEx_InjectedGetValue(hadc1,ADC_INJECTED_RANK_1);
+	  ADCRawData[1]=HAL_ADCEx_InjectedGetValue(hadc1,ADC_INJECTED_RANK_2);
+	  ADCRawData[2]=HAL_ADCEx_InjectedGetValue(hadc1,ADC_INJECTED_RANK_3);
+	  ADCRawData[3]=HAL_ADCEx_InjectedGetValue(hadc1,ADC_INJECTED_RANK_4);
+}
 /* USER CODE END 4 */
 
 /* USER CODE BEGIN Header_StartDefaultTask */
@@ -467,33 +523,33 @@ static void MX_GPIO_Init(void)
   * @retval None
   */
 /* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void const * argument)
-{
-
-  /* USER CODE BEGIN 5 */
-    uint16_t r = 10000;
-    int16_t rInc = 100;
-    uint16_t b = 20000;
-    uint16_t g = 30000;
-    int16_t bInc = -100;
-    int16_t gInc = -100;
-  /* Infinite loop */
-  for(;;)
-  {
-	r += rInc;
-	g += gInc;
-	b += bInc;
-	if ((r > 45400) || (r < 200)) rInc = -rInc;
-	if ((g > 45400) || (g < 200)) gInc = -gInc;
-	if ((b > 45400) || (b < 200)) bInc = -bInc;
-
-	TIM3->CCR1 = b; //B
-	TIM3->CCR2 = g; //G
-	TIM3->CCR3 = r; //R
-    osDelay(10);
-  }
-  /* USER CODE END 5 */ 
-}
+//void StartDefaultTask(void const * argument)
+//{
+//
+//  /* USER CODE BEGIN 5 */
+//    uint16_t r = 10000;
+//    int16_t rInc = 100;
+//    uint16_t b = 20000;
+//    uint16_t g = 30000;
+//    int16_t bInc = -100;
+//    int16_t gInc = -100;
+//  /* Infinite loop */
+//  for(;;)
+//  {
+//	r += rInc;
+//	g += gInc;
+//	b += bInc;
+//	if ((r > 45400) || (r < 200)) rInc = -rInc;
+//	if ((g > 45400) || (g < 200)) gInc = -gInc;
+//	if ((b > 45400) || (b < 200)) bInc = -bInc;
+//
+//	TIM3->CCR1 = b; //B
+//	TIM3->CCR2 = g; //G
+//	TIM3->CCR3 = r; //R
+//    osDelay(10);
+//  }
+//  /* USER CODE END 5 */
+//}
 
 /**
   * @brief  This function is executed in case of error occurrence.

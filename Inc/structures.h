@@ -29,4 +29,16 @@ enum Compensation{
 	ON
 };
 
+enum IndicationState{
+	NORMAL_C,
+	NORMAL_NC,
+	SEARCH,
+	COMPENSATION
+};
+
+enum AirSystemType{
+	COMPRESSOR,
+	RECEIVER
+};
+
 #endif /* STRUCTURES_H_ */
