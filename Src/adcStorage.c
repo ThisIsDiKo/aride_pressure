@@ -17,7 +17,7 @@ extern enum Compensation pressureCompensation;
 extern enum IndicationState indicationState;
 enum Compensation prevCompensation = OFF;
 
-uint8_t lastTimeCommand = 0;
+uint16_t lastTimeCommand = 0;
 
 extern uint16_t ADCRawData[4];
 extern uint16_t sensorValue[4];
@@ -93,9 +93,17 @@ void xStoreADCDataTask(void* arguments){
 			C3_DOWN_OFF;
 			C4_UP_OFF;
 			C4_DOWN_OFF;
-			lastTimeCommand = 0;
+
 			if (indicationState != SEARCH){
 				indicationState = NORMAL_NC;
+				lastTimeCommand = 0;
+			}
+			else{
+				lastTimeCommand++;
+				if (lastTimeCommand > 600){
+					indicationState = NORMAL_NC;
+					lastTimeCommand = 0;
+				}
 			}
 		}
 		else{
@@ -135,7 +143,7 @@ void xStoreADCDataTask(void* arguments){
 
 		}
 
-		vTaskDelay(ADC_DATA_PERIOD);
+		vTaskDelay(ADC_DATA_PERIOD / portTICK_RATE_MS);
 	}
 
 	vTaskDelete(NULL);

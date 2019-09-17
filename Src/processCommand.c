@@ -52,7 +52,11 @@ void xProcessCommandTask(void* arguments){
 			switch(command[0]){
 
 				case 'm':{
-					indicationState = NORMAL_C;
+
+					if (indicationState != SEARCH){
+						indicationState = NORMAL_C;
+					}
+
 					sscanf((char*)command, "m,%hu,%c,%c,\n", &id, &co, &outputState);
 					outputState = command[10];
 					if (id == server_UID){
@@ -124,38 +128,38 @@ void xProcessCommandTask(void* arguments){
 					break;
 				}
 				case 'x':{
-					if (command[1] == '?'){
-						sscanf((char*)command, "x?%hu,\n", &controllerSettings.clientID);
-						messageLength = sprintf(message, "x,%05d,%05d,\n", controllerSettings.clientID, server_UID);
-						HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
-					}
-					else if (command[1] == 'c'){
-						sscanf((char*)command, "xc,%hu,%hu,\n", &id, &channel);
-
-						messageLength = sprintf(message, "id,%05d,%05d,%03d\n", id, server_UID, channel);
-						print_debug(message);
-						//HAL_UART_Transmit(&huart1, (uint8_t*) message, messageLength, 0x2000);
-
-						if (id == server_UID){
-							controllerSettings.rfChannel = channel;
-							mWrite_flash();
-							messageLength = sprintf(message, "xc,%05d,ok,\n", controllerSettings.clientID);
+					if (indicationState == SEARCH){
+						if (command[1] == '?'){
+							sscanf((char*)command, "x?%hu,\n", &controllerSettings.clientID);
+							messageLength = sprintf(message, "x,%05d,%05d,\n", controllerSettings.clientID, server_UID);
 							HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
+						}
+						else if (command[1] == 'c'){
+							sscanf((char*)command, "xc,%hu,%hu,\n", &id, &channel);
 
-							vTaskDelay(200 / portTICK_RATE_MS);
-							CMD_RF_ON;
-							vTaskDelay(50 / portTICK_RATE_MS);
+							messageLength = sprintf(message, "id,%05d,%05d,%03d\n", id, server_UID, channel);
+							print_debug(message);
+							//HAL_UART_Transmit(&huart1, (uint8_t*) message, messageLength, 0x2000);
 
-							messageLength = sprintf(message, "AT+C%03d\r", channel);
-							HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
+							if (id == server_UID){
+								controllerSettings.rfChannel = channel;
+								mWrite_flash();
+								messageLength = sprintf(message, "xc,%05d,ok,\n", controllerSettings.clientID);
+								HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
-							vTaskDelay(50 / portTICK_RATE_MS);
-							CMD_RF_OFF;
+								vTaskDelay(200 / portTICK_RATE_MS);
+								CMD_RF_ON;
+								vTaskDelay(50 / portTICK_RATE_MS);
 
-							//TODO: change back to normal led functions
-							//HAL_GPIO_WritePin(A_LED_PORT, A_LED_PIN, GPIO_PIN_RESET);
-							indicationState = NORMAL_C;
+								messageLength = sprintf(message, "AT+C%03d\r", channel);
+								HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
+								vTaskDelay(50 / portTICK_RATE_MS);
+								CMD_RF_OFF;
+
+								indicationState = NORMAL_C;
+
+							}
 						}
 					}
 					break;
