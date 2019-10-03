@@ -48,17 +48,19 @@ void xAnalyzeTask(void *arguments){
 				for (i = 0; i < 4; i++){
 					if (pressIsLower[i]){
 						deltaPressure = nessPressure[i] - filteredData[i];
+						deltaPressure = abs(deltaPressure);
 						if (deltaPressure > pressureThreshold){
-							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
+							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
+							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							workState = WORKING;
 						}
 					}
 					else {
 						deltaPressure = filteredData[i] - nessPressure[i];
+						deltaPressure = abs(deltaPressure);
 						if (deltaPressure > pressureThreshold){
-							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
-							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
+							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
+							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
 							workState = WORKING;
 						}
 					}
