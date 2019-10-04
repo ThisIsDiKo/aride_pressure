@@ -23,7 +23,7 @@ extern uint16_t nessPressure[4];
 extern enum Compensation pressureCompensation;
 extern enum IndicationState indicationState;
 
-uint8_t pressIsLower[4] = {0};
+int8_t pressIsLower[4] = {0};
 extern uint8_t lastTimeCommand;
 
 extern uint16_t server_UID;
