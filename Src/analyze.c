@@ -30,6 +30,10 @@ extern uint32_t UP_PIN[4];
 extern GPIO_TypeDef *DOWN_PORT[4];
 extern uint32_t DOWN_PIN[4];
 
+extern char message[128];
+extern uint8_t messageLength;
+extern UART_HandleTypeDef huart1;
+
 void xAnalyzeTask(void *arguments){
 	portBASE_TYPE xStatus;
 	uint8_t i = 0;
@@ -48,6 +52,9 @@ void xAnalyzeTask(void *arguments){
 	uint16_t startPressure[4];
 	uint32_t impCounter = 0;
 	uint8_t stopImp = 0;
+	uint16_t impTime[4];
+	float impCoeff[4];
+
 	xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
 	for(;;){
 		xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
@@ -103,7 +110,7 @@ void xAnalyzeTask(void *arguments){
 					if (pressIsLower[i] == 0){
 						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
 					}
-					else if (pressureIsLower[i] == 1){
+					else if (pressIsLower[i] == 1){
 						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
 					}
 					else{
@@ -127,7 +134,12 @@ void xAnalyzeTask(void *arguments){
 					pressureCompensation = ON;
 				}
 
-				vTaskDelay(2000);
+				vTaskDelay(1000);
+
+				#if DEBUG_SERIAL
+					messageLength = sprintf(message, "---IMP DATA---\n");
+					HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+				#endif
 
 				for (i = 0 ; i < 4; i++){
 					deltaPressure = filteredData[i] - startPressure[i];
@@ -136,6 +148,14 @@ void xAnalyzeTask(void *arguments){
 					if ((impTime[i] < 0) || (impTime[i] > 60000)){
 						impTime[i] = 0;
 					}
+					else{
+						impTime[i] += 200;
+					}
+
+					#if DEBUG_SERIAL
+						messageLength = sprintf(message, "%d: %d\t%d\t%d\t%d\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i]);
+						HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+					#endif
 				}
 
 				impCounter = 0;
