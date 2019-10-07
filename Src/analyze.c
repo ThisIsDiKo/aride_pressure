@@ -41,7 +41,7 @@ void xAnalyzeTask(void *arguments){
 	int16_t deltaPressure = 0;
 	uint8_t prescalerCounter = 10;
 	//uint8_t analyzeCounterRef[4] = {5};
-	int16_t pressureThreshold = 20;
+	int16_t pressureThreshold = 40;
 
 	uint16_t medArray[4][7];
 	uint8_t counter = 0;
@@ -52,8 +52,9 @@ void xAnalyzeTask(void *arguments){
 	uint16_t startPressure[4];
 	uint32_t impCounter = 0;
 	uint8_t stopImp = 0;
-	uint16_t impTime[4];
-	float impCoeff[4];
+	volatile int32_t impTime[4] = {0, 0, 0, 0};
+	float impCoeff[4] = {0.0,0.0,0.0,0.0};
+	uint16_t calibrationImp = 1000;
 
 	xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
 	for(;;){
@@ -61,6 +62,7 @@ void xAnalyzeTask(void *arguments){
 		if (xStatus == pdPASS){
 			if (airSystem == RECEIVER){
 				workState = FREE;
+
 
 
 				for (i = 0; i < 4; i++){
@@ -88,6 +90,11 @@ void xAnalyzeTask(void *arguments){
 				}
 				//Got median values
 
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "+++NEW STEP+++\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
+
 				for (i = 0; i < 4; i++){
 					startPressure[i] = filteredData[i];
 					deltaPressure = nessPressure[i] - filteredData[i];
@@ -105,19 +112,32 @@ void xAnalyzeTask(void *arguments){
 					}
 				}
 
+				if (pressureCompensation == OFF){
+					for (i = 0; i < 4; i++){
+						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
+					}
+					continue;
+				}
 
 				for (i = 0; i < 4; i++){
-					if (pressIsLower[i] == 0){
+					if (pressIsLower[i] == 1){
 						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
+						calibrationImp = 1000;
 					}
-					else if (pressIsLower[i] == 1){
+					else if (pressIsLower[i] == 0){
 						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
+						calibrationImp = 500;
 					}
 					else{
 						continue; // do nothing
 					}
 
-					vTaskDelay(1000);
+					if (impTime[i] > 0){
+						calibrationImp -= 300;
+					}
+
+					vTaskDelay(calibrationImp);
 
 					HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 					HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
@@ -128,10 +148,22 @@ void xAnalyzeTask(void *arguments){
 				//perehod
 				if (workState == FREE){
 					pressureCompensation = OFF;
+					impTime[0] = 0;
+					impTime[1] = 0;
+					impTime[2] = 0;
+					impTime[3] = 0;
 					continue;
 				}
 				else{
 					pressureCompensation = ON;
+				}
+
+				if (pressureCompensation == OFF){
+					for (i = 0; i < 4; i++){
+						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
+					}
+					continue;
 				}
 
 				vTaskDelay(1000);
@@ -142,30 +174,45 @@ void xAnalyzeTask(void *arguments){
 				#endif
 
 				for (i = 0 ; i < 4; i++){
-					deltaPressure = filteredData[i] - startPressure[i];
-					impCoeff[i] = (float) 1000 / (float) deltaPressure;
-					impTime[i] = (int16_t)(impCoeff[i] * (float)(nessPressure[i] - filteredData[i]));
-					if ((impTime[i] < 0) || (impTime[i] > 60000)){
-						impTime[i] = 0;
+					if (pressIsLower[i] >=0){
+						deltaPressure = filteredData[i] - startPressure[i];
+						impCoeff[i] = (float) calibrationImp / (float) deltaPressure;
+						impTime[i] = (int32_t)(impCoeff[i] * (float)(nessPressure[i] - filteredData[i]));
+						if ((impTime[i] < 0) || (impTime[i] > 60000)){
+							impTime[i] = 0;
+						}
+						else{
+							impTime[i] += 200;
+						}
 					}
 					else{
-						impTime[i] += 200;
+						impTime[i] = 0;
 					}
 
+
 					#if DEBUG_SERIAL
-						messageLength = sprintf(message, "%d: %d\t%d\t%d\t%d\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i]);
+						messageLength = sprintf(message, "%d: %d\t%d\t%d\t%ld\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i]);
 						HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 					#endif
 				}
 
+				vTaskDelay(1000);
 				impCounter = 0;
+
+				if (pressureCompensation == OFF){
+					for (i = 0; i < 4; i++){
+						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
+						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
+					}
+					continue;
+				}
 
 				for (i = 0 ; i < 4; i++){
 					if (impTime[i] > 0){
-						if (pressIsLower[i] == 0){
+						if (pressIsLower[i] == 1){
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
 						}
-						else if (pressIsLower[i] == 1){
+						else if (pressIsLower[i] == 0){
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
 						}
 					}
@@ -180,10 +227,10 @@ void xAnalyzeTask(void *arguments){
 						if(impCounter > impTime[i]){
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-							stopImp = +1;
+							stopImp += 1;
 						}
 					}
-					if (stopImp = 4){
+					if (stopImp >= 4){
 						break;
 					}
 				}
