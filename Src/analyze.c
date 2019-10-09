@@ -43,7 +43,7 @@ void xAnalyzeTask(void *arguments){
 	int16_t deltaPressure = 0;
 	uint8_t prescalerCounter = 10;
 	//uint8_t analyzeCounterRef[4] = {5};
-	int16_t pressureThreshold = 100;
+	int16_t pressureThreshold = 40;
 
 	uint16_t medArray[4][7];
 	uint8_t counter = 0;
@@ -53,6 +53,7 @@ void xAnalyzeTask(void *arguments){
 
 	uint16_t startPressure[4];
 	uint32_t impCounter = 0;
+	uint32_t dCounter = 0;
 	uint8_t stopImp = 0;
 	volatile int32_t impTime[4] = {0, 0, 0, 0};
 	float impCoeff[4] = {0.0,0.0,0.0,0.0};
@@ -106,29 +107,42 @@ void xAnalyzeTask(void *arguments){
 					messageLength = sprintf(message, "---IMP DATA---\n");
 					HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 				#endif
+
 				for (i = 0; i < 4; i++){
+					deltaPressure = nessPressure[i] - filteredData[i];
 					if (pressIsLower[i] == 1){
-						impTime[i] = (int32_t)(controllerSettings.impUpCoeff[i] * (float)(nessPressure[i] - filteredData[i]));
+
+						impTime[i] = (int32_t)(controllerSettings.impUpCoeff[i] * (float)deltaPressure);
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d: up %ld\n", i, impTime[i]);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 						if (impTime[i] < 0) impTime[i] = 0;
+						else if (impTime[i] == 0) impTime[i] = 1000;
 						else if (impTime[i] > 30000) impTime[i] = 1000;
 					}
 					else if (pressIsLower[i] == 0){
-						impTime[i] = (int32_t)(controllerSettings.impDownCoeff[i] * (float)(nessPressure[i] - filteredData[i]));
+						impTime[i] = (int32_t)(controllerSettings.impDownCoeff[i] * (float)deltaPressure);
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d: down %ld\n", i,  impTime[i]);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 						if (impTime[i] < 0) impTime[i] = 0;
+						else if (impTime[i] == 0) impTime[i] = 500;
 						else if (impTime[i] > 30000) impTime[i] = 500;
 					}
 					else{
 						impTime[i] = 0;
 					}
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d: %ld\n", i, impTime[i]);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 
-					#if DEBUG_SERIAL
-						messageLength = sprintf(message, "%d: %d\t%d\t%d\t%ld\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i]);
-						HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-					#endif
 
 				}
 
-				vTaskDelay(1000);
+				vTaskDelay(500);
 				impCounter = 0;
 
 				if (pressureCompensation == OFF){
@@ -154,35 +168,55 @@ void xAnalyzeTask(void *arguments){
 					}
 				}
 
+				impCounter = xTaskGetTickCount();
 				while(1){
 					stopImp = 0;
-					vTaskDelay(5);
-					impCounter += 5;
+					vTaskDelay(100);
+					dCounter = xTaskGetTickCount() - impCounter;
 
 					for (i = 0 ; i < 4; i++){
-						if(impCounter > impTime[i]){
+						if(dCounter > impTime[i]){
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d: off %ld\t %ld\n",i, impTime[i], xTaskGetTickCount() - impCounter);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
 							stopImp += 1;
+						}
+						else{
+							if (pressIsLower[i] == 1){
+								HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
+							}
+							else if (pressIsLower[i] == 0){
+								HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
+							}
 						}
 					}
 					if (stopImp >= 4){
 						break;
 					}
 				}
-
-				vTaskDelay(2000);
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "all imp off after %ld\n", xTaskGetTickCount() - impCounter);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
+				vTaskDelay(1000);
 
 				for (i = 0 ; i < 4; i++){
 					if (pressIsLower[i] >=0){
 						deltaPressure = filteredData[i] - startPressure[i];
 						impCoeff[i] = (float)impTime[i] / (float) deltaPressure;
-						if (pressureIsLower[i] == 1){
+						if (pressIsLower[i] == 1){
 							controllerSettings.impUpCoeff[i] = impCoeff[i];
 						}
 						else if (pressIsLower[i] == 0){
 							controllerSettings.impDownCoeff[i] = impCoeff[i];
 						}
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d: %d\t%d\t%d\t%ld\t%d\t%d\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i],(int)controllerSettings.impUpCoeff[i],(int)controllerSettings.impDownCoeff[i]);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 					}
 				}
 				mWrite_flash();
