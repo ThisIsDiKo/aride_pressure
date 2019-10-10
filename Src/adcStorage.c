@@ -85,14 +85,16 @@ void xStoreADCDataTask(void* arguments){
 	for(;;){
 
 		if (lastTimeCommand > 50){
-			C1_UP_OFF;
-			C1_DOWN_OFF;
-			C2_UP_OFF;
-			C2_DOWN_OFF;
-			C3_UP_OFF;
-			C3_DOWN_OFF;
-			C4_UP_OFF;
-			C4_DOWN_OFF;
+			if (pressureCompensation == OFF){
+				C1_UP_OFF;
+				C1_DOWN_OFF;
+				C2_UP_OFF;
+				C2_DOWN_OFF;
+				C3_UP_OFF;
+				C3_DOWN_OFF;
+				C4_UP_OFF;
+				C4_DOWN_OFF;
+			}
 
 			if (indicationState != SEARCH){
 				indicationState = NORMAL_NC;

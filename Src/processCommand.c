@@ -99,7 +99,13 @@ void xProcessCommandTask(void* arguments){
 				case 's':{
 					if (command[1] == 'x'){
 						sscanf((char*)command, "sx,%hu,\n", &id);
+
+
 						if (id == server_UID){
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "compens off\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 							pressureCompensation = OFF;
 						}
 					}

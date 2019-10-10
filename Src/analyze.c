@@ -55,7 +55,7 @@ void xAnalyzeTask(void *arguments){
 	uint32_t impCounter = 0;
 	uint32_t dCounter = 0;
 	uint8_t stopImp = 0;
-	volatile int32_t impTime[4] = {0, 0, 0, 0};
+	int32_t impTime[4] = {0, 1, 2, 3};
 	float impCoeff[4] = {0.0,0.0,0.0,0.0};
 	uint16_t calibrationImp = 1000;
 
@@ -67,7 +67,7 @@ void xAnalyzeTask(void *arguments){
 				workState = FREE;
 
 				#if DEBUG_SERIAL
-					messageLength = sprintf(message, "+++NEW STEP+++\n");
+					messageLength = sprintf(message, "+++NEW STEP+++ pc=%d\n", pressureCompensation);
 					HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 				#endif
 
@@ -98,9 +98,6 @@ void xAnalyzeTask(void *arguments){
 					impTime[3] = 0;
 					continue;
 				}
-				else{
-					pressureCompensation = ON;
-				}
 
 				//calculate impulse
 				#if DEBUG_SERIAL
@@ -119,6 +116,7 @@ void xAnalyzeTask(void *arguments){
 #endif
 						if (impTime[i] < 0) impTime[i] = 0;
 						else if (impTime[i] == 0) impTime[i] = 1000;
+						else if (impTime[i] > 10000) impTime[i] = 10000;
 						else if (impTime[i] > 30000) impTime[i] = 1000;
 					}
 					else if (pressIsLower[i] == 0){
@@ -129,6 +127,7 @@ void xAnalyzeTask(void *arguments){
 #endif
 						if (impTime[i] < 0) impTime[i] = 0;
 						else if (impTime[i] == 0) impTime[i] = 500;
+						else if (impTime[i] > 10000) impTime[i] = 10000;
 						else if (impTime[i] > 30000) impTime[i] = 500;
 					}
 					else{
@@ -143,7 +142,6 @@ void xAnalyzeTask(void *arguments){
 				}
 
 				vTaskDelay(500);
-				impCounter = 0;
 
 				if (pressureCompensation == OFF){
 					for (i = 0; i < 4; i++){
@@ -170,27 +168,15 @@ void xAnalyzeTask(void *arguments){
 
 				impCounter = xTaskGetTickCount();
 				while(1){
-					stopImp = 0;
 					vTaskDelay(100);
 					dCounter = xTaskGetTickCount() - impCounter;
 
+					stopImp = 0;
 					for (i = 0 ; i < 4; i++){
 						if(dCounter > impTime[i]){
-#if DEBUG_SERIAL
-	messageLength = sprintf(message, "%d: off %ld\t %ld\n",i, impTime[i], xTaskGetTickCount() - impCounter);
-	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-#endif
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-							stopImp += 1;
-						}
-						else{
-							if (pressIsLower[i] == 1){
-								HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
-							}
-							else if (pressIsLower[i] == 0){
-								HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
-							}
+							stopImp++;
 						}
 					}
 					if (stopImp >= 4){
@@ -202,6 +188,20 @@ void xAnalyzeTask(void *arguments){
 	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 #endif
 				vTaskDelay(1000);
+
+				for (i = 0 ; i < 4; i++){
+					if (impTime[i] > 500){
+						deltaPressure = filteredData[i] - startPressure[i];
+						deltaPressure = abs(deltaPressure);
+						if (deltaPressure < 10){
+							pressIsLower[i] = -1;
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "%d change is miserable %d\t%d\t%d\t%ld\t%d\t%d\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i],(int)controllerSettings.impUpCoeff[i],(int)controllerSettings.impDownCoeff[i]);
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
+						}
+					}
+				}
 
 				for (i = 0 ; i < 4; i++){
 					if (pressIsLower[i] >=0){
