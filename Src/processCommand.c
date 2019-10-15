@@ -42,6 +42,7 @@ void xProcessCommandTask(void* arguments){
 	char prevOutputState = 0;
 	//uint16_t sendData[4] = {0};
 	char systemType = 0;
+	char statusByte = 0;
 
 	for(;;){
 		xStatus = xQueueReceive(xRecCommandQueue, command, portMAX_DELAY);
@@ -60,11 +61,19 @@ void xProcessCommandTask(void* arguments){
 					sscanf((char*)command, "m,%hu,%c,%c,\n", &id, &co, &outputState);
 					outputState = command[10];
 					if (id == server_UID){
-						messageLength = sprintf(message, "m,%hu,%hu,%hu,%hu,%hu,\n", 	controllerSettings.clientID,
+
+						statusByte = 0;
+						if (pressureCompensation == ON){
+							statusByte = 0x01;
+						}
+
+						//added statusByte for best indication
+						messageLength = sprintf(message, "m,%hu,%hu,%hu,%hu,%hu,%c,\n", 	controllerSettings.clientID,
 																						filteredData[SENS_1],
 																						filteredData[SENS_2],
 																						filteredData[SENS_3],
-																						filteredData[SENS_4]);
+																						filteredData[SENS_4],
+																						statusByte);
 						HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
 						if (outputState != prevOutputState){

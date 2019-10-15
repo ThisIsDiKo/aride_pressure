@@ -35,6 +35,7 @@ extern char message[128];
 extern uint8_t messageLength;
 extern UART_HandleTypeDef huart1;
 extern struct controllerData controllerSettings;
+uint8_t numberOfTries = 0;
 
 void xAnalyzeTask(void *arguments){
 	portBASE_TYPE xStatus;
@@ -46,12 +47,15 @@ void xAnalyzeTask(void *arguments){
 	int16_t pressureThreshold = 40;
 
 
-	uint16_t startPressure[4];
-	uint32_t impCounter = 0;
-	uint32_t dCounter = 0;
-	uint8_t stopImp = 0;
+
+	uint8_t maxTries = 7;
+
 	int32_t impTime[4] = {0, 1, 2, 3};
 	float impCoeff[4] = {0.0,0.0,0.0,0.0};
+	uint16_t startPressure[4];
+	uint32_t dCounter = 0;
+	uint8_t stopImp = 0;
+	uint32_t impCounter = 0;
 
 
 	xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
@@ -60,6 +64,17 @@ void xAnalyzeTask(void *arguments){
 		if (xStatus == pdPASS){
 			if (airSystem == RECEIVER){
 				workState = FREE;
+				if (numberOfTries >= maxTries){
+					numberOfTries = 0;
+					pressureCompensation = OFF;
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "[INFO] exit by tries\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
+				}
+				else{
+					numberOfTries += 1;
+				}
 
 
 				//Look at pressure
@@ -87,6 +102,7 @@ void xAnalyzeTask(void *arguments){
 					impTime[1] = 0;
 					impTime[2] = 0;
 					impTime[3] = 0;
+					numberOfTries = 0;
 					continue;
 				}
 
@@ -137,6 +153,7 @@ void xAnalyzeTask(void *arguments){
 					impTime[1] = 0;
 					impTime[2] = 0;
 					impTime[3] = 0;
+					numberOfTries = 0;
 					continue;
 				}
 
@@ -265,7 +282,7 @@ void xAnalyzeTask(void *arguments){
 					}
 				}
 #if DEBUG_SERIAL
-	messageLength = sprintf(message, "[INFO] Results\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i],(int)controllerSettings.impUpCoeff[i],(int)controllerSettings.impDownCoeff[i]);
+	messageLength = sprintf(message, "[INFO] Results\n");
 	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 #endif
 				for (i = 0 ; i < 4; i++){

@@ -22,6 +22,7 @@ uint16_t lastTimeCommand = 0;
 extern uint16_t ADCRawData[4];
 extern uint16_t sensorValue[4];
 extern uint16_t filteredData[4];
+extern uint8_t numberOfTries;
 
 uint16_t fir_filter(uint16_t *signal, uint16_t sample){
 	uint32_t filteredSample = 0;
@@ -132,6 +133,7 @@ void xStoreADCDataTask(void* arguments){
 		}
 		else{
 			if (prevCompensation == ON){
+				numberOfTries = 0;
 				C1_UP_OFF;
 				C1_DOWN_OFF;
 				C2_UP_OFF;

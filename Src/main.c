@@ -499,9 +499,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 				xQueueSendToBackFromISR(xRecCommandQueue, &commandToProcessBuffer, &r1);
 				p_recCommandBuffer = 0;
 			}
-			else if (recCommandByte == 0xFF) {
-				p_recCommandBuffer = 0;
-			}
+//			else if (recCommandByte == 0xFF) {
+//				p_recCommandBuffer = 0;
+//			}
 		}
 
 		HAL_UART_Receive_IT(&huart1, &recCommandByte, 1);
