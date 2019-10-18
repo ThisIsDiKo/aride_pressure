@@ -44,7 +44,7 @@ void xAnalyzeTask(void *arguments){
 	int16_t deltaPressure = 0;
 
 	//uint8_t analyzeCounterRef[4] = {5};
-	int16_t pressureThreshold = 40;
+	int16_t pressureThreshold = 30;
 
 
 
@@ -209,7 +209,7 @@ void xAnalyzeTask(void *arguments){
 	messageLength = sprintf(message, "[INFO] %d: down %ld\n", i,  impTime[i]);
 	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 #endif
-						if (impTime[i] < 0) impTime[i] = 0;
+						if (impTime[i] < 0) impTime[i] = 500;
 						else if (impTime[i] == 0) impTime[i] = 500;
 						else if (impTime[i] > 10000) impTime[i] = 10000;
 						else if (impTime[i] > 30000) impTime[i] = 500;
@@ -290,10 +290,14 @@ void xAnalyzeTask(void *arguments){
 						deltaPressure = filteredData[i] - startPressure[i];
 						impCoeff[i] = (float)impTime[i] / (float) deltaPressure;
 						if (pressIsLower[i] == 1){
-							controllerSettings.impUpCoeff[i] = (impCoeff[i] + controllerSettings.impUpCoeff[i]) / 2.0;
+							if (impCoeff[i] >= 0.0)
+								//controllerSettings.impUpCoeff[i] = (impCoeff[i] + controllerSettings.impUpCoeff[i]) / 2.0;
+								controllerSettings.impUpCoeff[i] = impCoeff[i];
 						}
 						else if (pressIsLower[i] == 0){
-							controllerSettings.impDownCoeff[i] = (impCoeff[i] + controllerSettings.impDownCoeff[i]) / 2.0;
+							if (impCoeff[i] <= 0.0)
+								//controllerSettings.impDownCoeff[i] = (impCoeff[i] + controllerSettings.impDownCoeff[i]) / 2.0;
+								controllerSettings.impDownCoeff[i] = impCoeff[i];
 						}
 #if DEBUG_SERIAL
 	messageLength = sprintf(message, "\t%d: %d\t%d\t%d\t%ld\t%d\t%d\n", i, nessPressure[i], startPressure[i], filteredData[i], impTime[i],(int)controllerSettings.impUpCoeff[i],(int)controllerSettings.impDownCoeff[i]);

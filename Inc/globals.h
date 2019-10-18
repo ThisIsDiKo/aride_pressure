@@ -12,7 +12,7 @@
 #include "cmsis_os.h"
 #include <string.h>
 
-#define DEBUG_SERIAL	1
+#define DEBUG_SERIAL	0
 
 #define HALL_SENS_PORT							GPIOA
 #define HALL_SENS_PIN							GPIO_PIN_8
