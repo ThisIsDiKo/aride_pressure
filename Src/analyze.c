@@ -10,7 +10,7 @@
 #include "analyze.h"
 #include "flashFunctions.h"
 
-#include "math.h"
+//#include "math.h"
 
 extern uint16_t nessPressure[4];
 extern uint16_t filteredData[4];
@@ -36,6 +36,7 @@ extern uint8_t messageLength;
 extern UART_HandleTypeDef huart1;
 extern struct controllerData controllerSettings;
 uint8_t numberOfTries = 0;
+uint8_t waysType = 6;
 
 void xAnalyzeTask(void *arguments){
 	portBASE_TYPE xStatus;
@@ -56,6 +57,10 @@ void xAnalyzeTask(void *arguments){
 	uint32_t dCounter = 0;
 	uint8_t stopImp = 0;
 	uint32_t impCounter = 0;
+	uint8_t numOfAxles = 0;
+	uint8_t numOfWays[2] = {0, 0};
+	uint8_t axleCounter = 0;
+	uint8_t wayCounter = 0;
 
 
 	xStatus = xSemaphoreTake(xPressureCompensationSemaphore, portMAX_DELAY);
@@ -106,166 +111,136 @@ void xAnalyzeTask(void *arguments){
 					continue;
 				}
 
+
+				switch (waysType){
+					case 1:{
+						numOfAxles = 1;
+						numOfWays[0] = 1;
+						numOfWays[1] = 0;
+						break;
+					}
+					case 2:{
+						numOfAxles = 1;
+						numOfWays[0] = 2;
+						numOfWays[1] = 0;
+						break;
+					}
+					case 3:{
+						numOfAxles = 2;
+						numOfWays[0] = 1;
+						numOfWays[1] = 1;
+						break;
+					}
+					case 4:{
+						numOfAxles = 2;
+						numOfWays[0] = 2;
+						numOfWays[1] = 1;
+						break;
+					}
+					case 5:{
+						numOfAxles = 2;
+						numOfWays[0] = 1;
+						numOfWays[1] = 2;
+						break;
+					}
+					case 6:{
+						numOfAxles = 2;
+						numOfWays[0] = 2;
+						numOfWays[1] = 2;
+						break;
+					}
+
+				}
+
 				//calculate impulse
 				#if DEBUG_SERIAL
 					messageLength = sprintf(message, "[INFO] ---IMP DATA---\n");
 					HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
 				#endif
 
-				for (i = 0; i < 2; i++){
-					deltaPressure = nessPressure[i] - filteredData[i];
-					if (pressIsLower[i] == 1){
 
-						impTime[i] = (int32_t)(controllerSettings.impUpCoeff[i] * (float)deltaPressure);
-#if DEBUG_SERIAL
-	messageLength = sprintf(message, "[INFO] %d: up %ld\n", i, impTime[i]);
-	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-#endif
-						if (impTime[i] < 0) impTime[i] = 0;
-						else if (impTime[i] == 0) impTime[i] = 1000;
-						else if (impTime[i] > 10000) impTime[i] = 10000;
-						else if (impTime[i] > 30000) impTime[i] = 1000;
-					}
-					else if (pressIsLower[i] == 0){
-						impTime[i] = (int32_t)(controllerSettings.impDownCoeff[i] * (float)deltaPressure);
-#if DEBUG_SERIAL
-	messageLength = sprintf(message, "[INFO] %d: down %ld\n", i,  impTime[i]);
-	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-#endif
-						if (impTime[i] < 0) impTime[i] = 0;
-						else if (impTime[i] == 0) impTime[i] = 500;
-						else if (impTime[i] > 10000) impTime[i] = 10000;
-						else if (impTime[i] > 30000) impTime[i] = 500;
-					}
-					else{
-						impTime[i] = 0;
-					}
-				}
-
-				vTaskDelay(1000);
-
-				if (pressureCompensation == OFF){
-					for (i = 0; i < 4; i++){
-						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
-						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-					}
-					impTime[0] = 0;
-					impTime[1] = 0;
-					impTime[2] = 0;
-					impTime[3] = 0;
-					numberOfTries = 0;
-					continue;
-				}
-
-				for (i = 0 ; i < 2; i++){
-					if (impTime[i] > 0){
+				for (axleCounter = 0; axleCounter < numOfAxles; axleCounter++){
+					for (wayCounter = 0; wayCounter < numOfWays[axleCounter]; wayCounter++){
+						i = axleCounter + axleCounter*numOfWays[0] + wayCounter;
+						deltaPressure = nessPressure[i] - filteredData[i];
 						if (pressIsLower[i] == 1){
-							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
+
+							impTime[i] = (int32_t)(controllerSettings.impUpCoeff[i] * (float)deltaPressure);
+	#if DEBUG_SERIAL
+		messageLength = sprintf(message, "[INFO] %d: up %ld\n", i, impTime[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+	#endif
+							if (impTime[i] < 0) impTime[i] = 0;
+							else if (impTime[i] == 0) impTime[i] = 1000;
+							else if (impTime[i] > 10000) impTime[i] = 10000;
+							else if (impTime[i] > 30000) impTime[i] = 1000;
 						}
 						else if (pressIsLower[i] == 0){
-							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
+							impTime[i] = (int32_t)(controllerSettings.impDownCoeff[i] * (float)deltaPressure);
+	#if DEBUG_SERIAL
+		messageLength = sprintf(message, "[INFO] %d: down %ld\n", i,  impTime[i]);
+		HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+	#endif
+							if (impTime[i] < 0) impTime[i] = 0;
+							else if (impTime[i] == 0) impTime[i] = 500;
+							else if (impTime[i] > 10000) impTime[i] = 10000;
+							else if (impTime[i] > 30000) impTime[i] = 500;
+						}
+						else{
+							impTime[i] = 0;
 						}
 					}
-				}
+					vTaskDelay(200);
 
-				impCounter = xTaskGetTickCount();
-				while(1){
-					vTaskDelay(20);
-					dCounter = xTaskGetTickCount() - impCounter;
-
-					stopImp = 0;
-					for (i = 0 ; i < 2; i++){
-						if(dCounter > impTime[i]){
+					if (pressureCompensation == OFF){
+						for (i = 0; i < 4; i++){
 							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
 							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-							stopImp++;
 						}
-					}
-					if (stopImp >= 2){
+						impTime[0] = 0;
+						impTime[1] = 0;
+						impTime[2] = 0;
+						impTime[3] = 0;
+						numberOfTries = 0;
 						break;
 					}
-				}
-				vTaskDelay(1000);
 
-
-
-				for (i = 2; i < 4; i++){
-					deltaPressure = nessPressure[i] - filteredData[i];
-					if (pressIsLower[i] == 1){
-
-						impTime[i] = (int32_t)(controllerSettings.impUpCoeff[i] * (float)deltaPressure);
-#if DEBUG_SERIAL
-	messageLength = sprintf(message, "[INFO] %d: up %ld\n", i, impTime[i]);
-	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-#endif
-						if (impTime[i] < 0) impTime[i] = 0;
-						else if (impTime[i] == 0) impTime[i] = 1000;
-						else if (impTime[i] > 10000) impTime[i] = 10000;
-						else if (impTime[i] > 30000) impTime[i] = 1000;
+					for (wayCounter = 0; wayCounter < numOfWays[axleCounter]; wayCounter++){
+						i = axleCounter + axleCounter*numOfWays[0] + wayCounter;
+						if (impTime[i] > 0){
+							if (pressIsLower[i] == 1){
+								HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
+							}
+							else if (pressIsLower[i] == 0){
+								HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
+							}
+						}
 					}
-					else if (pressIsLower[i] == 0){
-						impTime[i] = (int32_t)(controllerSettings.impDownCoeff[i] * (float)deltaPressure);
-#if DEBUG_SERIAL
-	messageLength = sprintf(message, "[INFO] %d: down %ld\n", i,  impTime[i]);
-	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
-#endif
-						if (impTime[i] < 0) impTime[i] = 500;
-						else if (impTime[i] == 0) impTime[i] = 500;
-						else if (impTime[i] > 10000) impTime[i] = 10000;
-						else if (impTime[i] > 30000) impTime[i] = 500;
-					}
-					else{
-						impTime[i] = 0;
-					}
-				}
 
-				vTaskDelay(1000);
+					impCounter = xTaskGetTickCount();
+					while(1){
+						vTaskDelay(20);
+						dCounter = xTaskGetTickCount() - impCounter;
 
+						stopImp = 0;
+						for (wayCounter = 0; wayCounter < numOfWays[axleCounter]; wayCounter++){
+							i = axleCounter + axleCounter*numOfWays[0] + wayCounter;
+							if(dCounter > impTime[i]){
+								HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
+								HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
+								stopImp++;
+							}
+						}
+						if (stopImp >= numOfWays[axleCounter]){
+							break;
+						}
+					}
+					vTaskDelay(1000);
+				} //stepCounter
 				if (pressureCompensation == OFF){
-					for (i = 0; i < 4; i++){
-						HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
-						HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-					}
-					impTime[0] = 0;
-					impTime[1] = 0;
-					impTime[2] = 0;
-					impTime[3] = 0;
 					continue;
 				}
-
-				for (i = 2 ; i < 4; i++){
-					if (impTime[i] > 0){
-						if (pressIsLower[i] == 1){
-							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_SET);
-						}
-						else if (pressIsLower[i] == 0){
-							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_SET);
-						}
-					}
-				}
-
-				impCounter = xTaskGetTickCount();
-				while(1){
-					vTaskDelay(20);
-					dCounter = xTaskGetTickCount() - impCounter;
-
-					stopImp = 0;
-					for (i = 2 ; i < 4; i++){
-						if(dCounter > impTime[i]){
-							HAL_GPIO_WritePin(DOWN_PORT[i], DOWN_PIN[i], GPIO_PIN_RESET);
-							HAL_GPIO_WritePin(UP_PORT[i], UP_PIN[i], GPIO_PIN_RESET);
-							stopImp++;
-						}
-					}
-					if (stopImp >= 2){
-						break;
-					}
-				}
-				vTaskDelay(1000);
-
-
-
-
+//here starts common code
 
 
 				for (i = 0 ; i < 4; i++){
@@ -308,7 +283,7 @@ void xAnalyzeTask(void *arguments){
 				mWrite_flash();
 			}
 			else{
-
+				//TODO: compressor system
 			}
 		}
 	}
