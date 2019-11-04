@@ -17,6 +17,8 @@ struct controllerData{
 	uint16_t clientID;
 	uint16_t qeqe;
 	uint32_t rfMaster;
+	float impUpCoeff[4];
+	float impDownCoeff[4];
 };
 
 enum WorkState{

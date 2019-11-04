@@ -23,7 +23,7 @@ extern uint16_t nessPressure[4];
 extern enum Compensation pressureCompensation;
 extern enum IndicationState indicationState;
 
-uint8_t pressIsLower[4] = {0};
+int8_t pressIsLower[4] = {0};
 extern uint8_t lastTimeCommand;
 
 extern uint16_t server_UID;
@@ -42,6 +42,7 @@ void xProcessCommandTask(void* arguments){
 	char prevOutputState = 0;
 	//uint16_t sendData[4] = {0};
 	char systemType = 0;
+	char statusByte = 0;
 
 	for(;;){
 		xStatus = xQueueReceive(xRecCommandQueue, command, portMAX_DELAY);
@@ -52,15 +53,27 @@ void xProcessCommandTask(void* arguments){
 			switch(command[0]){
 
 				case 'm':{
-					indicationState = NORMAL_C;
+
+					if (indicationState != SEARCH){
+						indicationState = NORMAL_C;
+					}
+
 					sscanf((char*)command, "m,%hu,%c,%c,\n", &id, &co, &outputState);
 					outputState = command[10];
 					if (id == server_UID){
-						messageLength = sprintf(message, "m,%hu,%hu,%hu,%hu,%hu,\n", 	controllerSettings.clientID,
+
+						statusByte = 0;
+						if (pressureCompensation == ON){
+							statusByte = 0x01;
+						}
+
+						//added statusByte for best indication
+						messageLength = sprintf(message, "m,%hu,%hu,%hu,%hu,%hu,%c,\n", 	controllerSettings.clientID,
 																						filteredData[SENS_1],
 																						filteredData[SENS_2],
 																						filteredData[SENS_3],
-																						filteredData[SENS_4]);
+																						filteredData[SENS_4],
+																						statusByte);
 						HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
 						if (outputState != prevOutputState){
@@ -95,7 +108,13 @@ void xProcessCommandTask(void* arguments){
 				case 's':{
 					if (command[1] == 'x'){
 						sscanf((char*)command, "sx,%hu,\n", &id);
+
+
 						if (id == server_UID){
+#if DEBUG_SERIAL
+	messageLength = sprintf(message, "compens off\n");
+	HAL_UART_Transmit(&huart1, (uint8_t*)message, messageLength, 0xFFFF);
+#endif
 							pressureCompensation = OFF;
 						}
 					}
@@ -124,38 +143,38 @@ void xProcessCommandTask(void* arguments){
 					break;
 				}
 				case 'x':{
-					if (command[1] == '?'){
-						sscanf((char*)command, "x?%hu,\n", &controllerSettings.clientID);
-						messageLength = sprintf(message, "x,%05d,%05d,\n", controllerSettings.clientID, server_UID);
-						HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
-					}
-					else if (command[1] == 'c'){
-						sscanf((char*)command, "xc,%hu,%hu,\n", &id, &channel);
-
-						messageLength = sprintf(message, "id,%05d,%05d,%03d\n", id, server_UID, channel);
-						print_debug(message);
-						//HAL_UART_Transmit(&huart1, (uint8_t*) message, messageLength, 0x2000);
-
-						if (id == server_UID){
-							controllerSettings.rfChannel = channel;
-							mWrite_flash();
-							messageLength = sprintf(message, "xc,%05d,ok,\n", controllerSettings.clientID);
+					if (indicationState == SEARCH){
+						if (command[1] == '?'){
+							sscanf((char*)command, "x?%hu,\n", &controllerSettings.clientID);
+							messageLength = sprintf(message, "x,%05d,%05d,\n", controllerSettings.clientID, server_UID);
 							HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
+						}
+						else if (command[1] == 'c'){
+							sscanf((char*)command, "xc,%hu,%hu,\n", &id, &channel);
 
-							vTaskDelay(200 / portTICK_RATE_MS);
-							CMD_RF_ON;
-							vTaskDelay(50 / portTICK_RATE_MS);
+							messageLength = sprintf(message, "id,%05d,%05d,%03d\n", id, server_UID, channel);
+							print_debug(message);
+							//HAL_UART_Transmit(&huart1, (uint8_t*) message, messageLength, 0x2000);
 
-							messageLength = sprintf(message, "AT+C%03d\r", channel);
-							HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
+							if (id == server_UID){
+								controllerSettings.rfChannel = channel;
+								mWrite_flash();
+								messageLength = sprintf(message, "xc,%05d,ok,\n", controllerSettings.clientID);
+								HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
-							vTaskDelay(50 / portTICK_RATE_MS);
-							CMD_RF_OFF;
+								vTaskDelay(200 / portTICK_RATE_MS);
+								CMD_RF_ON;
+								vTaskDelay(50 / portTICK_RATE_MS);
 
-							//TODO: change back to normal led functions
-							//HAL_GPIO_WritePin(A_LED_PORT, A_LED_PIN, GPIO_PIN_RESET);
-							indicationState = NORMAL_C;
+								messageLength = sprintf(message, "AT+C%03d\r", channel);
+								HAL_UART_Transmit_DMA(&huart1, (uint8_t*) message, messageLength);
 
+								vTaskDelay(50 / portTICK_RATE_MS);
+								CMD_RF_OFF;
+
+								indicationState = NORMAL_C;
+
+							}
 						}
 					}
 					break;

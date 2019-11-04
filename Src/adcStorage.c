@@ -17,11 +17,12 @@ extern enum Compensation pressureCompensation;
 extern enum IndicationState indicationState;
 enum Compensation prevCompensation = OFF;
 
-uint8_t lastTimeCommand = 0;
+uint16_t lastTimeCommand = 0;
 
 extern uint16_t ADCRawData[4];
 extern uint16_t sensorValue[4];
 extern uint16_t filteredData[4];
+extern uint8_t numberOfTries;
 
 uint16_t fir_filter(uint16_t *signal, uint16_t sample){
 	uint32_t filteredSample = 0;
@@ -85,17 +86,27 @@ void xStoreADCDataTask(void* arguments){
 	for(;;){
 
 		if (lastTimeCommand > 50){
-			C1_UP_OFF;
-			C1_DOWN_OFF;
-			C2_UP_OFF;
-			C2_DOWN_OFF;
-			C3_UP_OFF;
-			C3_DOWN_OFF;
-			C4_UP_OFF;
-			C4_DOWN_OFF;
-			lastTimeCommand = 0;
+			if (pressureCompensation == OFF){
+				C1_UP_OFF;
+				C1_DOWN_OFF;
+				C2_UP_OFF;
+				C2_DOWN_OFF;
+				C3_UP_OFF;
+				C3_DOWN_OFF;
+				C4_UP_OFF;
+				C4_DOWN_OFF;
+			}
+
 			if (indicationState != SEARCH){
 				indicationState = NORMAL_NC;
+				lastTimeCommand = 0;
+			}
+			else{
+				lastTimeCommand++;
+				if (lastTimeCommand > 600){
+					indicationState = NORMAL_NC;
+					lastTimeCommand = 0;
+				}
 			}
 		}
 		else{
@@ -122,6 +133,7 @@ void xStoreADCDataTask(void* arguments){
 		}
 		else{
 			if (prevCompensation == ON){
+				numberOfTries = 0;
 				C1_UP_OFF;
 				C1_DOWN_OFF;
 				C2_UP_OFF;
@@ -135,7 +147,7 @@ void xStoreADCDataTask(void* arguments){
 
 		}
 
-		vTaskDelay(ADC_DATA_PERIOD);
+		vTaskDelay(ADC_DATA_PERIOD / portTICK_RATE_MS);
 	}
 
 	vTaskDelete(NULL);

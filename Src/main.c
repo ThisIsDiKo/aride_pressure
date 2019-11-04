@@ -469,7 +469,7 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = GPIO_PIN_2;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB3 PB4 PB5 PB6 
@@ -478,7 +478,7 @@ static void MX_GPIO_Init(void)
                           |GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_MEDIUM;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
@@ -499,9 +499,9 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart){
 				xQueueSendToBackFromISR(xRecCommandQueue, &commandToProcessBuffer, &r1);
 				p_recCommandBuffer = 0;
 			}
-			else if (recCommandByte == 0xFF) {
-				p_recCommandBuffer = 0;
-			}
+//			else if (recCommandByte == 0xFF) {
+//				p_recCommandBuffer = 0;
+//			}
 		}
 
 		HAL_UART_Receive_IT(&huart1, &recCommandByte, 1);
